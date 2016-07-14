@@ -40,7 +40,7 @@ Take a moment to review the report then address the following questions.
 <li> A poll conducted by WIN-Gallup International surveyed 51,927 people from 57 countries. </li>
 </ol>
 
-- More than 50,000 men and women selected from 57 countries across the globe in five continents.
+- A total of 51,927 persons from 57 countries across the globe in five continents.
 
 2. Which of the following methods were used to gather information? 
 <ol>
@@ -66,7 +66,7 @@ Take a moment to review the report then address the following questions.
 <li> False </li>
 </ol>
 
-- True
+- False
 
 ### The data
 
@@ -83,6 +83,8 @@ data(atheism)
 <li> Religions </li>
 </ol>
 
+- Countries
+
 6. What does each row of `atheism` correspond to?
 <ol>
 <li> Countries </li> 
@@ -90,7 +92,7 @@ data(atheism)
 <li> Religions </li>
 </ol>
 
-- Countries
+- Individual Persons
 
 To investigate the link between these two ways of organizing this data, take a look at the estimated proportion of atheists in the United States. Towards the bottom of Table 6, we see that this is 5%. We should be able to come to the same number using the `atheism` data.
 

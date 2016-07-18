@@ -28,31 +28,77 @@ load("/Users/iBowen/Desktop/stat/stat_coursera/project2/gss.Rdata")
 
 ## Part 1: Data
 
-Describe how the observations in the sample are collected, and the implications of this data collection method on the scope of inference (generalizability / causality).
-
-As mentioned in the Codebook, the observation data is collected by computer-assisted personal interview (CAPI), face-to-face interview, and telephone interview. There is no experiment assignment occuring int sampling. Hence, the research question below could only produce generalizability but not causality.
+__As mentioned in the Codebook, the observation data is collected by computer-assisted personal interview (CAPI), face-to-face interview, and telephone interview. There is no experiment assignment occuring int sampling. Hence, the research question below could only produce generalizability but not causality.__
 
 
 * * *
 
 ## Part 2: Research question
 
-```{r load-data}
-str(gss)
-```
+__Does there appear to be a relationship between political party affiliation and
+region of interview?__
 
 * * *
 
 ## Part 3: Exploratory data analysis
 
-NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
-button (green button with orange arrow) above. Make sure that your code is visible
-in the project you submit. Delete this note when before you submit your work.
+```{r}
+# subset political party affiliation as 'partyid' and region of interview as 'region'
+data <- gss[, c('partyid', 'region')]
+table(data)
+# each cell has at least 5 cases
+
+# make a mosaic plot to show the distribution under party and affiliation
+mosaicplot(~ region + partyid, data = data, main = 'Distribution of Political Party Affiliation and Region of Interview', color = TRUE)
+
+# note: I couldn't find a solution to handle label overlapping, but it won't affect to find the proportion difference inbetween each cell.
+```
+
+As shown in the plotting, the proportions are different along each variable. But before we confirm a dependent relationship between these two variables, an inference test is needed. Since we have two categorical varaibles, so a Chi-Square statistics is used to test the independence between party affiliation and region of interview.
 
 * * *
 
 ## Part 4: Inference
 
-NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
-button (green button with orange arrow) above. Make sure that your code is visible
-in the project you submit. Delete this note when before you submit your work.
+__Step 1. Check the condition__
+
+Independence:
+
+- Random sample/assignment: the observations are collected by independent interview.
+- If sampling without replacement, n < 10% of population. The total data points are 57,061, absolutly less than the 10% of US popluation.
+- Each case only contributes to one cell in the table.
+
+Sample size: 
+
+- Each particular scenario must have at least 5 expected cases. The minimum cell is 41
+
+So, it meets the condiiton for Chi-Square test
+
+__Step 2. Build the Null and Alternative Hypothesis__
+
+H0: Political affiliation and region of interview are independent. Political affiliation does not vary by region of interview.
+
+HA: Political affiliation and region of interview are dependent. Political affiliation does vary by region of interview.
+
+__Step 3. Implement the Chi-Square Independent Test__
+
+```{r}
+# transform table into dataframe with NA removed
+matrix.obs <- as.data.frame.matrix(table(data))
+# calculate rowsum and colsum
+rowtotal <- rowSums(matrix.obs)
+coltotal <- colSums(matrix.obs)
+# record the total value
+total <- sum(rowtotal)
+# calculate expected matrix
+matrix.exp <- (rowtotal / total) %*% t(coltotal)
+# calculate X2 and degree of freedom
+X2 <- sum((matrix.obs - matrix.exp) ^ 2 / matrix.exp)
+df <- (dim(matrix.obs)[1] - 1) * (dim(matrix.obs)[2] - 1)
+# calculate the p-value
+pchisq(X2, df, lower.tail = FALSE)
+```
+
+__Conclusion__
+we can find the p-value is extremely small compared the 5% significant level, so we are going to reject the H0, and accect the HA. That means, there is a associaiton between the region of interview and political affiliation.
+

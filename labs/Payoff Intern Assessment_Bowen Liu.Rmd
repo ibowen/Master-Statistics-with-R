@@ -12,7 +12,7 @@ library(dplyr)
 library(zoo)
 library(ggplot2)
 library(scales)
-#install.packages("RPostgreSQL")
+# install.packages("RPostgreSQL")
 library(RPostgreSQL)
 # db connection configuration
 dbname <- "intern"
@@ -163,7 +163,7 @@ ggplot(data = q4_2015, aes(x = loan_status, y = average_dti)) +
     annotate("text", x = 'Fully Paid', y = 20, label = "Safe 19.2%")
 ```
 
-Based on the Debt-to-income(dti) charts, we can find the loan status of "Current" and "Fully Paid" have uanimously lower dti than Defaults and others negative status. And dti could be used as one predictors for the "Defaluts" status
+Based on the Debt-to-income(dti) charts, we can find the loan status of "Current" and "Fully Paid" have unanimously lower dti than Defaults and others negative status. And dti could be used as one predictors for the "Defaluts" status
 
 # Set B: 
 - Question 1: Review and QA the dataset and summarize your thoughts on any structural issues:

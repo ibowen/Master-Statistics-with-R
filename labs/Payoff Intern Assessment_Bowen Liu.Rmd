@@ -1,0 +1,195 @@
+---
+title: "Payoff Intern Assessment"
+author: "Bowen Liu"
+date: "May 11, 2016"
+output: html_document
+---
+
+## Configurations
+
+```{r,message=FALSE,warning=FALSE}
+library(dplyr)
+library(zoo)
+library(ggplot2)
+library(scales)
+# install.packages("RPostgreSQL")
+library(RPostgreSQL)
+# db connection configuration
+dbname <- "intern"
+host <- "payoff-showtime.ctranyfsb6o1.us-east-1.rds.amazonaws.com"
+port <- 5432
+user <- "payoff_intern"
+password <- 'reallysecure'
+# Establish connection to PoststgreSQL using RPostgreSQL
+drv <- dbDriver("PostgreSQL")
+con <- dbConnect(drv, dbname=dbname, host=host, port=port, user=user, password=password)
+```
+
+## Set A: 
+- Question 1: What is the monthly total loan volume by dollars and by average loan size?
+- Column needed: issue_d, loan_amnt
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+sql1 <- "SELECT issue_d, sum(loan_amnt), avg(loan_amnt) FROM lending_club_2007_2011 GROUP BY issue_d UNION
+        SELECT issue_d, sum(loan_amnt), avg(loan_amnt) FROM lending_club_2012_2013 GROUP BY issue_d UNION
+        SELECT issue_d, sum(loan_amnt), avg(loan_amnt) FROM lending_club_2014 GROUP BY issue_d UNION
+        SELECT issue_d, sum(loan_amnt), avg(loan_amnt) FROM lending_club_2015 GROUP BY issue_d"
+q1 <- dbGetQuery(con, sql1)
+# remove NA
+q1 <- na.omit(q1)
+# change character into Date format using zoo library
+q1$issue_d <- as.yearmon(q1$issue_d, "%b-%Y")
+q1 <- arrange(q1, issue_d)
+# monthly total loan volume by dollars
+ggplot(data = q1, aes(x = issue_d, y = sum / 1000000)) +
+    geom_line(color = 'red') +
+    ggtitle('Monthly Total Loan Volumn') +
+    xlab('Loan issue date') +
+    ylab('Total loan volume(M $)')
+# monthly total loan volume by average loan size
+ggplot(data = q1, aes(x = issue_d, y = avg /1000)) +
+    geom_line(color = 'red') +
+    ggtitle('Monthly Average Loan Size') +
+    xlab('Loan issue date') +
+    ylab('Average loan size(K $)')
+```
+
+- Question 2: What are the default rates by Loan Grade?
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+# query all default counts by grade
+sql2_defaults <- 
+    "SELECT grade, sum(c) as default_count
+    FROM (
+        SELECT grade, count(*) AS c FROM lending_club_2007_2011 WHERE loan_status = 'Default' GROUP BY grade
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2012_2013 WHERE loan_status ='Default' GROUP BY grade
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2014 WHERE loan_status ='Default' GROUP BY grade
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2015 WHERE loan_status ='Default' GROUP BY grade
+    ) AS tmp
+    GROUP BY grade"
+q2_defaults <- dbGetQuery(con, sql2_defaults)
+# order by grade
+q2_defaults <- arrange(q2_defaults, grade)
+
+# query all counts by grade
+sql2_all <-
+    "SELECT grade, sum(c) as all_count
+    FROM (
+        SELECT grade, count(*) AS c FROM lending_club_2007_2011 GROUP BY grade          
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2012_2013 GROUP BY grade           
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2014 GROUP BY grade
+        UNION
+        SELECT grade, count(*) AS c FROM lending_club_2015 GROUP BY grade
+    ) AS tmp
+    GROUP BY grade"
+q2_all <- dbGetQuery(con, sql2_all)
+# remove null row
+q2_all <- q2_all[!(is.na(q2_all$grade) | q2_all$grade==""), ]
+# order by grade
+q2_all <- arrange(q2_all, grade)
+
+# merge defaults and all counts by grade
+q2 <- inner_join(q2_defaults, q2_all, by = c('grade'))
+
+# calculate the default rate
+q2 <- mutate(q2, default_rate = default_count / all_count)
+
+# plot the result
+ggplot(data = q2, aes(x = grade, y = default_rate, fill = grade)) +
+    scale_y_continuous(labels = percent) +
+    geom_bar(stat = 'identity') +
+    ggtitle('Default Rates by Grade') +
+    xlab('Grade') +
+    ylab('Default Rates')
+```
+
+The defaults rates increase from grade A to G.
+
+- Question 3: Are we charging an appropriate rate for risk?
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+# 2007 - 2014 with interest rate of character format %
+sql3_07_14 <- "SELECT grade, int_rate FROM lending_club_2007_2011 UNION
+        SELECT grade, int_rate FROM lending_club_2012_2013 UNION
+        SELECT grade, int_rate FROM lending_club_2014"
+q3_07_14 <- dbGetQuery(con, sql3_07_14)
+q3_07_14$int_rate <- as.numeric(gsub('%', '', q3_07_14$int_rate))
+# 2015
+sql3_15 <- "SELECT grade, int_rate FROM lending_club_2015"
+q3_15 <- dbGetQuery(con, sql3_15)
+# row bind q3_07_14 and q3_15
+q3 <- rbind(q3_07_14, q3_15)
+# boxplot to see the distribution of intreste rate by each grade
+ggplot(data = q3, aes(x = grade, y = int_rate, fill = grade)) +
+    geom_boxplot() +
+    ggtitle('Interest Rates Plot by Grades') +
+    xlab('Grade') +
+    ylab('Interest Rate(%)')
+```
+
+The interest rates increase from grades A to G. We are add appropriate rates based on the riks. The high grade like A has lower rate, conversely low grade like G has the average highest rates.
+
+- Question 4: What are the predictors of default rate?
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+
+sql4_2014 <- "SELECT loan_status, avg(dti) AS average_dti FROM lending_club_2014 GROUP BY loan_status"
+q4_2014 <- dbGetQuery(con, sql4_2014)
+
+sql4_2015 <- "SELECT loan_status, avg(dti) AS average_dti FROM lending_club_2015 GROUP BY loan_status"
+q4_2015 <- dbGetQuery(con, sql4_2015)
+colors <- c("#D55E00", "#009E73", "#D55E00", "#009E73", "#D55E00", "#D55E00", "#D55E00")
+ggplot(data = q4_2014, aes(x = loan_status, y = average_dti)) +
+    geom_bar(stat = 'identity', fill = colors, alpha = 0.7) +
+    ylim(0, 25) +
+    geom_hline(yintercept = 18.32192, color = 'red', linetype = 2) +
+    ggtitle('Average Debt-to-Income Rates by Load Status in 2014') +
+    xlab('Loan Status') +
+    ylab('Average Debt-to-Income(%)') +
+    annotate("text", x = 'Fully Paid', y = 20, label = "Safe 18.3%")
+    
+ggplot(data = q4_2015, aes(x = loan_status, y = average_dti)) +
+    geom_bar(stat = 'identity', fill = colors, alpha = 0.7) +
+    ylim(0, 25) +
+    geom_hline(yintercept = 19.22656, color = 'red', linetype = 2) +
+    ggtitle('Average Debt-to-Income Rates by Load Status in 2015') +
+    xlab('Loan Status') +
+    ylab('Average Debt-to-Income(%)') +
+    annotate("text", x = 'Fully Paid', y = 20, label = "Safe 19.2%")
+```
+
+Based on the Debt-to-income(dti) charts, we can find the loan status of "Current" and "Fully Paid" have unanimously lower dti than Defaults and others negative status. And dti could be used as one predictors for the "Defaluts" status
+
+# Set B: 
+- Question 1: Review and QA the dataset and summarize your thoughts on any structural issues:
+- a. Is there missing data? Is the missing data random or structured: Are some attributes missing more than others?
+- b. Are any data values glaringly erroneous?
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+# Please uncomment the following codes to reproduce the results.
+# take the dataset of 2014 for example
+# sqlb_2014 <- "SELECT * FROM lending_club_2014"
+# sqlb_2014 <- dbGetQuery(con, sqlb_2014)
+# summary(sqlb_2014)
+#  The summary shows the existance of NAs:
+#  - random NAs: avg_cur_bal, bc_open_to_by, bc_util, mo_sin_old_il_acct, mths_since_recent_bc, mths_since_recent_inq, etc.
+#  - structure NAs: open_acc_6m, open_il_6m, and all other fields that have logical type
+
+# error: total payment should be higher than the total payment for investors
+# nrow(sqlb_2014[sqlb_2014$total_pymnt - sqlb_2014$total_pymnt_inv > 0, ])
+```
+
+- Question 2: Explain MapReduce:
+- someone with significant mathematical experience: MapReduce consists of modules: Map and Reduce. First, the whole dataset is split and input to multiple Maps. The map prepares each split as key-value pairs. Second, the Map outputs the pairs for shuffling to combine all pairs with the same key. Finally, the shuffled pairs are input into Reduce for the last manipulation.
+
+- someone with little mathematical experience: MapReduce splits a big job into some small jobs. Each job will be prepared seperately in Map. When finished, each map job will output their intermediate results to Reduce. Reduce will finalize the whole work.
+
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+# Close PostgreSQL connection 
+dbDisconnect(con)
+```

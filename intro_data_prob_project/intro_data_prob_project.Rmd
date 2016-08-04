@@ -1,0 +1,172 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r load-data, include=FALSE}
+load("/Users/iBowen/Desktop/stat/stat_coursera/intro_data_prob_project/brfss2013.RData")
+```
+
+* * *
+
+## Part 1: Data
+
+BRFSS is collecting the data by voluntary surveys, which means it could only establish an association. The data covers all 50 states and other other countries. It could be used for generalization but with voluntary response bias.
+
+* * *
+
+## Part 2: Research questions
+
+People talk about the risk of smoking, the benefits of physical excercise and more sleep. Here let's use data show the relationship between them.
+
+**Research quesion 1:**
+
+What kinds of association is between smoking habits and general health? 
+
+Variables used:
+
+- genhlth, General Health
+- smoke100, Smoked At Least 100 Cigarettes
+- subtotal, aggregation of of each health type
+- total, aggregation of if smoked
+
+**Research quesion 2:**
+
+What kinds of association is between physical activitiy and general health? 
+
+Variables used:
+
+- genhlth, General Health
+- exerany2, Exercise In Past 30 Days
+- subtotal, aggregation of of each health type
+- total, aggregation of if exercise in past 30 days
+
+**Research quesion 3:**
+
+What kinds of association is between sleep hours and health?
+
+Variables used:
+
+- genhlth, General Health
+- sleptim1, How Much Time Do You Sleep
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research quesion 1:**
+
+```{r,warning=FALSE}
+# subset the columns of general health and Smoked At Least 100 Cigarettes
+data.q1 <- brfss2013[, c('genhlth', 'smoke100')]
+# remove NAs
+data.q1 <- na.omit(data.q1)
+str(data.q1)
+# aggregate the head counts by genhlth and smoke100
+summary.q1 <- data.q1 %>% group_by(genhlth, smoke100) %>% summarize(subtotal = n())
+#summary.q1
+# aggregte the head counts by genhlth
+sum.by.genhlth.q1 <- summarize(group_by(summary.q1, genhlth), total = sum(subtotal))
+#sum.by.genhlth.q1
+# join two aggregations
+summary.q1 <- merge(summary.q1, sum.by.genhlth.q1, by = 'genhlth')
+#summary.q1
+# add the proportions for each category
+summary.q1 <- mutate(summary.q1, proportion = 1.0 * subtotal / total)
+# show the summary data
+summary.q1
+# show only the smoke category
+filter(summary.q1, smoke100 == 'Yes')
+# plot the summary data
+ggplot(data.q1, aes(x = genhlth, fill = smoke100)) + 
+    geom_bar() +
+    ggtitle('General Health By If Smoked At Least 100 Cigarettes') +
+    xlab('General Health') +
+    ylab('Head Count')
+```
+
+- As show in the plot, the proportion of smoke100 gradually increase from 'Excellent' to 'Poor'. We could check the proportions from summary data. It ranges from 0.33 to 0.61. So there is a negative assocation between smoking and health.
+
+**Research quesion 2:**
+
+```{r,warning=FALSE}
+# subset the columns of general health and Exercise In Past 30 Days
+data.q2 <- brfss2013[,c('genhlth', 'exerany2')]
+# remove NAs
+data.q2 <- na.omit(data.q2)
+str(data.q2)
+# aggregate the head counts by genhlth and exerany2
+summary.q2 <- data.q2 %>% group_by(genhlth, exerany2) %>% summarize(subtotal = n())
+#summary.q2
+# aggregte the head counts by genhlth
+sum.by.genhlth.q2 <- summarize(group_by(summary.q2, genhlth), total = sum(subtotal))
+#sum.by.genhlth.q2
+# join two aggregations
+summary.q2 <- merge(summary.q2, sum.by.genhlth.q2, by = 'genhlth')
+#summary.q2
+# add the proportions for each category
+summary.q2 <- mutate(summary.q2, proportion = 1.0 * subtotal / total)
+# show the summary data
+summary.q2
+# show only the excercise category
+filter(summary.q2, exerany2 == 'Yes')
+# plot the summary data
+ggplot(data.q2, aes(x = genhlth, fill = exerany2)) + 
+    geom_bar() +
+    ggtitle('General Health By If Exercise In Past 30 Days') +
+    xlab('General Health') +
+    ylab('Head Count')
+```
+
+- As show in the plot, the proportion of exercise in last 30 days gradually decrease from 'Excellent' to 'Poor'. We could check the proportions from summary data. It ranges from 0.79 to 0.39. So there is a positive assocation between excercise and health.
+
+**Research quesion 3:**
+
+```{r,warning=FALSE}
+# subset the columns of general health and How Much Time Do You Sleep
+data.q3 <- brfss2013[,c('genhlth', 'sleptim1')]
+# remove NAs
+data.q3 <- na.omit(data.q3)
+str(data.q3)
+# sleep time of excellent health
+data.q3.excellent <- filter(data.q3, genhlth == 'Excellent')
+summary(data.q3.excellent)
+# sleep time of very good health
+data.q3.verygood <- filter(data.q3, genhlth == 'Very good')
+summary(data.q3.verygood)
+# sleep time of excellent health
+data.q3.good <- filter(data.q3, genhlth == 'Good')
+summary(data.q3.good)
+# sleep time of fair health
+data.q3.fair <- filter(data.q3, genhlth == 'Fair')
+summary(data.q3.fair)
+# sleep time of poor health
+data.q3.poor <- filter(data.q3, genhlth == 'Poor')
+summary(data.q3.poor)
+# plot boxplot side by side
+ggplot(data.q3, aes(x = factor(genhlth), y = sleptim1)) + 
+    geom_boxplot() +
+    ggtitle('Sleep Hours By General Health') +
+    xlab('General Health') +
+    ylab('Sleep Hours')
+```
+
+- As show in the plot, the poor health has lower median sleep hours than any other health status. And there is a slight decrease of mean sleep time from summary data(7.19 ~ 6.896). Based on these, we could find a postive association between sleep time and general health.

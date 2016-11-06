@@ -21,9 +21,8 @@ library(GGally)
 ### Load data
 
 ```{r load-data, include=FALSE}
-load("/Users/iBowen/Desktop/stat/stat_coursera/reg_model_project/movies.Rdata")
+load("movies.Rdata")
 ```
-
 
 
 * * *

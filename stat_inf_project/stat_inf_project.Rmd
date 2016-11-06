@@ -20,7 +20,7 @@ library(statsr)
 ### Load data
 
 ```{r load-data}
-load("/Users/iBowen/Desktop/stat/stat_coursera/stat_inf_project/gss.Rdata")
+load("./gss.Rdata")
 ```
 
 

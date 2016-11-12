@@ -1,0 +1,265 @@
+---
+title: "Bayesian modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+```
+
+### Load data
+
+```{r load-data}
+load("movies.Rdata")
+
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+As shown in the codebook, the data set is comprised of 651 randomly sampled movies produced and released before 2016. Hence, the inference method only implicates generalization rather than causality.
+
+* * *
+
+## Part 2: Data manipulation
+
+```{r}
+# create feature_film
+movies <- mutate(movies, feature_film = factor(ifelse(title_type == 'Feature Film', 'yes', 'no')))
+# create drama
+movies <- mutate(movies, drama = factor(ifelse(genre =='Drama', 'yes', 'no')))
+# create mpaa_rating_R
+movies <- mutate(movies, mpaa_rating_R = factor(ifelse(mpaa_rating == 'R', 'yes', 'no')))
+# create oscar_season
+movies <- mutate(movies, oscar_season = factor(ifelse(thtr_rel_month >= 10, 'yes', 'no')))
+# create summer_season
+movies <- mutate(movies, summer_season = factor(ifelse(thtr_rel_month %in% c(5,6,7,8), 'yes', 'no')))
+
+head(movies[c("title_type", "feature_film", "genre", "drama", "mpaa_rating", "mpaa_rating_R")])
+
+head(movies[c("thtr_rel_month", "oscar_season", "summer_season")])
+```
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+### Conduct exploratory data analysis of the relationship between audience_score and the new variables
+
+```{r}
+new.movies <- movies[c("feature_film", "drama", "mpaa_rating_R", "oscar_season", "summer_season", "audience_score")]
+summary(new.movies)
+```
+
+- All new features are binary type. Feature films takes the majority of title types. Drama and mpaa_rating_R have roughly half movies in their respective categories. Osaca_season and summer_season have more fillms released than other months.
+
+- "audience_score" has the median slightly higher than mean, which results in a slightly left skewed distribution. 
+
+```{r}
+ggplot(new.movies, aes(factor(feature_film), audience_score, fill=feature_film)) + 
+    geom_boxplot() +
+    ggtitle('Audience Score Distribution by Feature Film') +
+    xlab('feature_film') +
+    ylab('audience_score')
+
+bayes_inference(y = audience_score, x = feature_film, data = new.movies, statistic = "mean", type = "ht", null = 0, alternative = "twosided")
+```
+
+- Feature film has a significant impact on the audienc score. The non feature film tends to have higher and more compact scores than the feature film.
+- Bayes factor of H2 against H1 also shows a strong evedience that feature film is significant in affecting final scores
+
+```{r}
+ggplot(new.movies, aes(factor(drama), audience_score, fill=drama)) + 
+    geom_boxplot() +
+    ggtitle('Audience Score Distribution by Drama') +
+    xlab('drama') +
+    ylab('audience_score')
+
+bayes_inference(y = audience_score, x = drama, data = new.movies, statistic = "mean", type = "ht", null = 0, alternative = "twosided")
+```
+
+- The drama genre has higher scorer than non-drama genre. And the interquartile range (IQR) of drama genre is more compact than the non-drama genre. People who like drama tend to have more similar scores than those whos dislike drama.
+- The bayesian factor is 22.6, showing a positive evidence of H2 against H1. It means drama genre definitely influences the final score.
+
+```{r}
+ggplot(new.movies, aes(factor(mpaa_rating_R), audience_score, fill=mpaa_rating_R)) + 
+    geom_boxplot() +
+    ggtitle('Audience Score Distribution by MPAA Rating R') +
+    xlab('mpaa_rating_R') +
+    ylab('audience_score')
+
+bayes_inference(y = audience_score, x = mpaa_rating_R, data = new.movies, statistic = "mean", type = "ht", null = 0, alternative = "twosided")
+```
+
+- Audience scores have close distribution between R and non-R ratings, except R movies have a wider IQR than Non-R movies. It looks like people differ on the same R rating movies.
+- The bayesian factor is 24, showing a positive evidence of H1 against H2. It means that R rating cannot affect the final score.
+
+```{r}
+ggplot(new.movies, aes(factor(oscar_season), audience_score, fill=oscar_season)) + 
+    geom_boxplot() +
+    ggtitle('Audience Score Distribution by Oscar Season') +
+    xlab('oscar_season') +
+    ylab('audience_score')
+
+bayes_inference(y = audience_score, x = oscar_season, data = new.movies, statistic = "mean", type = "ht", null = 0, alternative = "twosided")
+```
+
+- Audience scores have very close distributions between Oscar seasons and non Oscar season. Although Oscar seasons have slight impact on people's ratings, the media scores increase quite a bit. People tend to score higher on average.
+- The bayesian factor is 13.4 with positive evidence of H1 against H2. The Oscar seasons cannot affect the final rating.
+
+```{r}
+ggplot(new.movies, aes(factor(summer_season), audience_score, fill=summer_season)) + 
+    geom_boxplot() +
+    ggtitle('Audience Score Distribution by Summer Season') +
+    xlab('summer_season') +
+    ylab('audience_score')
+
+bayes_inference(y = audience_score, x = summer_season, data = new.movies, statistic = "mean", type = "ht", null = 0, alternative = "twosided")
+```
+
+- Summer season doen't show significat impact on the audience score. The distributions are very close to each other.
+- The bayesian factor is 21.71, showing a positive evidence of H1 against H2.
+
+
+* * *
+
+## Part 4: Modeling
+### We use 10 fold cross validation on four criteria of "Bayesian model averaging", "highest probability model", "median probability model", "best predictive model" to choose the optimal model with the lowest average precition error.
+
+```{r}
+model.movies <- movies[c("feature_film", "drama", "runtime", "mpaa_rating_R",
+"thtr_rel_year", "oscar_season", "summer_season", "imdb_rating", "imdb_num_votes",
+"critics_score", "best_pic_nom", "best_pic_win", "best_actor_win", "best_actress_win",
+"best_dir_win", "top200_box", "audience_score")]
+
+# remove nans
+colSums(is.na(model.movies))
+model.movies <- na.omit(model.movies)
+
+# log transform to normalize the features
+model.movies[c("runtime", "thtr_rel_year", "imdb_rating", "imdb_num_votes", "critics_score")] <- lapply(model.movies[c("runtime", "thtr_rel_year", "imdb_rating", "imdb_num_votes", "critics_score")], function(x) {log(1 + x)})
+
+# model 
+set.seed(116)
+n = nrow(model.movies)
+n_cv = 10
+ape = matrix(NA, ncol=4, nrow=n_cv)
+colnames(ape) = c("BMA", "BPM", "HPM", "MPM")
+
+for (i in 1:n_cv) {
+  train = sample(1:n, size=round(.90*n), replace=FALSE)
+  movies_train = model.movies[train,]
+  movies_test = model.movies[-train,]
+
+  bma_train_movie = bas.lm(audience_score ~ .-audience_score, data=movies_train, prior="ZS-null", modelprior=uniform(), initprobs="eplogp")
+  yhat_bma = predict(bma_train_movie, movies_test, estimator="BMA")$fit
+  yhat_hpm = predict(bma_train_movie, movies_test, estimator="HPM")$fit
+  yhat_mpm = predict(bma_train_movie, movies_test, estimator="MPM")$fit
+  yhat_bpm = predict(bma_train_movie, movies_test, estimator="BPM")$fit
+  ape[i, "BMA"] = cv.summary.bas(yhat_bma, movies_test$audience_score)
+  ape[i, "BPM"] = cv.summary.bas(yhat_bpm, movies_test$audience_score)
+  ape[i, "HPM"] = cv.summary.bas(yhat_hpm, movies_test$audience_score)
+  ape[i, "MPM"] = cv.summary.bas(yhat_mpm, movies_test$audience_score)
+}
+```
+
+- View the side-by-side boxplots of the average prediction errors as well as the mean of the APE over the different test sets.
+
+```{r}
+boxplot(ape)
+apply(ape, 2, mean)
+```
+
+- The prediction errors are pretty close for these four criteria. The best is the BMA, followed by BPM. So BMA will be used to search the optimal model. Instead of enumerating all combinations of model, Markov chain Monte Carlo(MCMC) is used to improve model search efficiency.
+
+```{r}
+bma_movies = bas.lm(audience_score ~ ., data = model.movies,
+                   prior = "ZS-null", 
+                   method = "MCMC",
+                   modelprior = uniform())
+```
+
+```{r}
+# par(mfrow=c(2,2))
+plot(bma_movies, which=1, ask=FALSE)
+plot(bma_movies, which=2, ask=FALSE)
+plot(bma_movies, which=3, ask=FALSE, cex.lab=0.5)
+plot(bma_movies, which=4, ask=FALSE, cex.lab=0.5)
+```
+
+- The "Residuals vs Fitted" doen't show a constant spead over the prediction. And there are three outliers. Probably we need further transformation of numeric features.
+
+- The "Model Probabilities" shows that the model posterior probability begins to level off after 500 model trials. The model search stops at 3000 instead of enumerations of 2^16 combindations.
+
+- The "Model Complexity" shows that the highest log marginal can be reached from 2 to 14 dimensions. The log marginal becomes stable after 8 dimentions.
+
+- The "Inclusion Probabilities" shows the inclusion probabilities for features. The red lines are the features with top probablities to be included in the optimal model. As explored in the previous EDA part, feature film does contribute quite a bit to the final scores.
+
+```{r}
+image(bma_movies, rotate=F)
+```
+
+- The best model is the one including "intercept", "feature film", "thtr_rel_year", "imdb_rating", and "imdb_num_votes", which are all the top features with high inclusion probabilities. 
+
+```{r}
+par(mfrow=c(2,3))
+plot(coefficients(bma_movies), subset=c(1,2,6,9,10), ask=FALSE)
+```
+
+- The coefficient plottings also show strong evidence against the null values.
+
+
+* * *
+
+## Part 5: Prediction
+
+Data source:
+http://www.imdb.com/title/tt1211837/?ref_=fn_al_tt_1
+https://www.rottentomatoes.com/m/doctor_strange_2016
+
+```{r}
+doctor.strange <- data.frame(feature_film="yes",drama="no",runtime=115,mpaa_rating_R="no",
+                     thtr_rel_year=2016,oscar_season="yes",summer_season="no",
+                     imdb_rating=8,
+                     imdb_num_votes=67255,critics_score=90,best_pic_nom="no",
+                     best_pic_win="no",best_actor_win="no",best_actress_win="no",
+                     best_dir_win="no",top200_box="yes",audience_score=92)
+# log transformation
+doctor.strange[c("runtime", "thtr_rel_year", "imdb_rating", "imdb_num_votes", "critics_score")] <- lapply(doctor.strange[c("runtime", "thtr_rel_year", "imdb_rating", "imdb_num_votes", "critics_score")], function(x) {log(1 + x)})
+
+model.movies2 <- rbind(model.movies, doctor.strange)
+doctor.strange <-tail(model.movies2,1)
+str(doctor.strange)
+
+# Make a prediction of audience_score using bayesian model averaging.
+doctor.strange.pred <- predict(bma_movies, newdata=doctor.strange, estimator="BMA", se.fit=TRUE, interval="predict")
+
+
+doctor.strange.pred$Ybma
+```
+
+- The final prediction is 78.32294, and the real score at the time is 92. The error is pretty high. 
+
+* * *
+
+## Part 6: Conclusion
+
+In this project, the final prediction is not quite good, hence some places need improving:
+
+- Although log transformation is used to normalize and scale the numeric features, the "Residuals vs Fitted" plot is still nonlinear related. Further transformation is required to meet assumption for baysian linear regression.
+- There some post decision features such as best picture nomination, best actor, actress, director, etc.. Those features are unknown to some new films. That's one important reason to low prediction score for the "Doctor Strange" who just went on theatre for 3 days.
